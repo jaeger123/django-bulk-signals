@@ -1,0 +1,66 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# No PyPI token anywhere: publishing uses Trusted Publishing (OIDC), which
+# exchanges this workflow's identity for a short-lived upload token. Configure
+# it once at
+# https://pypi.org/manage/project/django-advanced-bulk-signals/settings/publishing/
+# with owner/repo, workflow name "release.yml" and environment "pypi".
+permissions: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # Deliberately no build cache here: a cache restored into a release build
+      # is a cache-poisoning path into a published artifact.
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Tag must match the version in pyproject.toml
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(uv version --short)
+          if [ "$version" != "${TAG#v}" ]; then
+            echo "::error::tag $TAG does not match version $version"
+            exit 1
+          fi
+
+      - name: Verify the wheel imports
+        run: |
+          uv run --isolated --no-project --with dist/*.whl \
+            python -c "import django_bulk_signals; print('import OK')"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi          # add a required reviewer here for a manual gate
+    permissions:
+      id-token: write          # required for trusted publishing
+    steps:
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        run: uv publish --trusted-publishing always

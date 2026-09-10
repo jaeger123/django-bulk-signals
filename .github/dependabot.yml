@@ -1,0 +1,25 @@
+version: 2
+updates:
+  # Keep the SHA-pinned actions current; Dependabot rewrites the pin and the
+  # trailing version comment together.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    # Wait before adopting a brand-new release, so a compromised or yanked
+    # version is not pulled in the moment it is published.
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      python:
+        patterns: ["*"]
