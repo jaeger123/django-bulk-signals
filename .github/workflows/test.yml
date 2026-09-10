@@ -1,0 +1,110 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, so a new Django release or a djmain regression surfaces even when
+    # nobody has pushed.
+    - cron: "0 6 * * 1"
+
+# Least privilege by default; each job opts in to what it needs.
+permissions: {}
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # All three jobs below are independent and run in parallel.
+  sqlite:
+    name: py${{ matrix.python }} / dj${{ matrix.django }} / sqlite
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Legacy: what the 0.1.x releases actually support.
+          - { python: "3.10", django: "32", toxenv: "py310-dj32" }
+          - { python: "3.10", django: "40", toxenv: "py310-dj40" }
+          - { python: "3.10", django: "41", toxenv: "py310-dj41" }
+          - { python: "3.12", django: "42", toxenv: "py312-dj42" }
+          # Currently supported by the Django project.
+          - { python: "3.10", django: "52", toxenv: "py310-dj52" }
+          - { python: "3.13", django: "52", toxenv: "py313-dj52" }
+          - { python: "3.12", django: "60", toxenv: "py312-dj60" }
+          - { python: "3.13", django: "61", toxenv: "py313-dj61" }
+          # Early warning for unreleased Django.
+          - { python: "3.13", django: "main", toxenv: "py313-djmain" }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install --upgrade pip tox
+      # pytest runs with -n auto inside tox, so tests are parallel within the job.
+      - run: tox -e ${{ matrix.toxenv }}
+
+  databases:
+    name: dj${{ matrix.django }} / ${{ matrix.backend }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { backend: postgres, django: "32", toxenv: "py310-dj32", python: "3.10" }
+          - { backend: postgres, django: "61", toxenv: "py313-dj61", python: "3.13" }
+          - { backend: mysql, django: "32", toxenv: "py310-dj32", python: "3.10" }
+          - { backend: mysql, django: "61", toxenv: "py313-dj61", python: "3.13" }
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bulksig
+          POSTGRES_PASSWORD: bulksig
+          POSTGRES_DB: bulksig
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: bulksig
+          MYSQL_DATABASE: bulksig
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -uroot -pbulksig"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      DB_BACKEND: ${{ matrix.backend }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install --upgrade pip tox
+      - run: tox -e ${{ matrix.toxenv }}-${{ matrix.backend }}
+
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      # Runs the same hooks developers run locally: ruff (the full ALL ruleset
+      # configured in pyproject.toml), ruff-format, gitleaks, zizmor and the
+      # file-hygiene checks. One source of truth for lint, not two.
+      - run: uvx pre-commit run --all-files --show-diff-on-failure

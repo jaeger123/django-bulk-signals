@@ -1,0 +1,150 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "django-advanced-bulk-signals"
+version = "1.0.0.dev0"
+description = "Signals for Django bulk_create/bulk_update/update, with field-level change tracking"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Akarsh Sharma", email = "akarsh1998@gmail.com" }]
+requires-python = ">=3.10"
+
+# Floor only, no upper cap: an upper bound would block every dependency graph
+# this package appears in on the day a new Django ships. Supported versions are
+# advertised via the Framework classifiers below and proven by tox.ini.
+dependencies = ["Django>=5.2"]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Framework :: Django :: 6.1",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/jaeger123/django-bulk-signals"
+Changelog = "https://github.com/jaeger123/django-bulk-signals/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+postgres = ["psycopg2-binary"]
+mysql = ["pymysql"]
+
+[dependency-groups]
+test = [
+    "pytest>=8.0",
+    "pytest-django>=4.8",
+    "pytest-xdist>=3.5",       # parallel test execution: `pytest -n auto`
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+testpaths = ["tests"]
+# Without this, pytest-django walks up looking for a manage.py, finds an
+# unrelated one in the parent directory, and puts it on sys.path ahead of us -
+# which shadows the `tests` package. Be explicit instead.
+django_find_project = false
+pythonpath = ["."]
+addopts = "-ra --strict-markers --strict-config"
+filterwarnings = [
+    # Django announces every removal two releases ahead, so a deprecation
+    # warning is a future breakage. Treat it as one.
+    "error::DeprecationWarning",
+    "error::PendingDeprecationWarning",
+    # TEMPORARY exemption for KNOWN BUG #1. Without it the providing_args
+    # deprecation becomes an ImportError on Django 3.2 too and the whole
+    # behavioural suite goes dark. DELETE when bug #1 is fixed.
+    "default:The providing_args argument is deprecated",
+]
+
+[tool.setuptools]
+packages = ["django_bulk_signals"]
+
+# Publishing is done with `uv publish` (see RELEASING.md). Note that uv does
+# NOT read ~/.pypirc - credentials come from UV_PUBLISH_TOKEN, keyring, or
+# trusted publishing (OIDC) in CI.
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+publish-url = "https://upload.pypi.org/legacy/"
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true   # never used for resolution unless asked for by name
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+exclude = ["main.py"]   # PyCharm scaffolding, not part of the package
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
+# Maximum strictness: every rule ruff ships, minus the ones that are actively
+# wrong for this project. Each exemption below is justified; there is no
+# blanket "too noisy" ignore.
+select = ["ALL"]
+ignore = [
+    # --- conflict with `ruff format` (documented as such by ruff itself) ---
+    "COM812",  # missing-trailing-comma
+    "ISC001",  # single-line-implicit-string-concatenation
+
+    # --- mutually exclusive docstring rules; we keep D211/D212 ---
+    "D203",    # incorrect-blank-line-before-class  (conflicts with D211)
+    "D213",    # multi-line-summary-second-line     (conflicts with D212)
+
+    # --- wrong for this codebase ---
+    # Preview rule enforcing a per-file copyright header; this project has no
+    # such policy.
+    "CPY001",  # missing-copyright-notice
+]
+
+[tool.ruff.lint.per-file-ignores]
+"django_bulk_signals/*" = [
+    # bulk_create(objs, batch_size=None, ignore_conflicts=False) deliberately
+    # mirrors Django's own signature, boolean positional argument included, as
+    # does find_updated_values(..., updated_foreign_keys). Making these
+    # keyword-only would silently break positional callers of the public API.
+    "FBT001",  # boolean-type-hint-positional-argument
+    "FBT002",  # boolean-default-value-positional-argument
+    # Reading _meta / _base_manager is the supported way to introspect a model.
+    "SLF001",  # private-member-access
+]
+"tests/*" = [
+    # Tests import the package inside test bodies on purpose: on Django >= 4.0
+    # the import raises, and a module-level import would break collection.
+    "PLC0415", # import-outside-top-level
+    # Django internals (_meta, _base_manager) are what several tests assert on.
+    "SLF001",  # private-member-access
+    # tests/models.py deliberately catches Exception so the app still loads
+    # when the package fails to import; the error is asserted in test_compat.
+    "BLE001",  # blind-except
+    # Django's TestCase API requires these as class attributes.
+    "RUF012",  # mutable-class-default
+    # A throwaway SECRET_KEY for an in-memory test database.
+    "S105",    # hardcoded-password-string
+    # Bare `assert` is how pytest tests are written.
+    "S101",    # assert
+    # Test functions are self-describing; a docstring per test is noise.
+    "D103",    # undocumented-public-function
+    # pytest fixtures are injected, so their types are opaque at the call site.
+    "ANN401",  # any-type
+    # Asserting a count against a literal is clearer than naming a constant.
+    "PLR2004", # magic-value-comparison
+]
