@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -14,7 +14,7 @@ requires-python = ">=3.10"
 # Floor only, no upper cap: an upper bound would block every dependency graph
 # this package appears in on the day a new Django ships. Supported versions are
 # advertised via the Framework classifiers below and proven by tox.ini.
-dependencies = ["Django>=5.2"]
+dependencies = ["Django>=5.2.17"]
 
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -45,9 +45,9 @@ mysql = ["pymysql"]
 
 [dependency-groups]
 test = [
-    "pytest>=8.0",
-    "pytest-django>=4.8",
-    "pytest-xdist>=3.5",       # parallel test execution: `pytest -n auto`
+    "pytest>=9.1.1",
+    "pytest-django>=4.14.0",
+    "pytest-xdist>=3.8.0",       # parallel test execution: `pytest -n auto`
 ]
 
 [tool.pytest.ini_options]
