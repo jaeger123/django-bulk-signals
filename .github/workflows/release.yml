@@ -23,7 +23,7 @@ jobs:
           persist-credentials: false
       # Deliberately no build cache here: a cache restored into a release build
       # is a cache-poisoning path into a published artifact.
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
 
       - name: Build sdist and wheel
         run: uv build
@@ -56,7 +56,7 @@ jobs:
     permissions:
       id-token: write          # required for trusted publishing
     steps:
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: dist
